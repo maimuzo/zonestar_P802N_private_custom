@@ -1,0 +1,3 @@
+---- Rotate Matches (2 in 1 files) ----
+Uilang.h (repetier):#define UI_TEXT_WIZ_CH_FILAMENT2_ID 205 // "Rotate to move"
+Uilang.h (repetier):#define UI_TEXT_WIZ_CH_FILAMENT2_EN "Rotate to move"
