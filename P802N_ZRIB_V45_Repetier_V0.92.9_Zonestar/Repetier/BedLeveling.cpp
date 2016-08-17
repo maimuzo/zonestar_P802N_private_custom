@@ -159,6 +159,13 @@ class PlaneBuilder {
 #if FEATURE_AUTOLEVEL && FEATURE_Z_PROBE
 
 bool measureAutolevelPlane(Plane &plane) {
+	// パラメタ出力
+	Com::printFLN(PSTR("measureAutolevelPlane(): BED_LEVELING_METHOD:"),BED_LEVELING_METHOD);
+	Com::printFLN(PSTR("measureAutolevelPlane(): BED_CORRECTION_METHOD:"),BED_CORRECTION_METHOD);
+	Com::printFLN(PSTR("measureAutolevelPlane(): BED_LEVELING_GRID_SIZE:"),BED_LEVELING_GRID_SIZE);
+	Com::printFLN(PSTR("measureAutolevelPlane(): BED_LEVELING_REPETITIONS:"),BED_LEVELING_REPETITIONS);
+
+
     PlaneBuilder builder;
     builder.reset();
 #if BED_LEVELING_METHOD == 0 // 3 point
@@ -179,6 +186,7 @@ bool measureAutolevelPlane(Plane &plane) {
         return false;
     builder.addPoint(EEPROM::zProbeX3(),EEPROM::zProbeY3(),h);
 #elif BED_LEVELING_METHOD == 1 // linear regression
+    // これが該当する
     float delta = 1.0 / (BED_LEVELING_GRID_SIZE - 1);
     float ox = EEPROM::zProbeX1();
     float oy = EEPROM::zProbeY1();
@@ -186,10 +194,29 @@ bool measureAutolevelPlane(Plane &plane) {
     float ay = delta * (EEPROM::zProbeY2() - EEPROM::zProbeY1());
     float bx = delta * (EEPROM::zProbeX3() - EEPROM::zProbeX1());
     float by = delta * (EEPROM::zProbeY3() - EEPROM::zProbeY1());
+    // ox,ax,bx, oy,ay,byの意味を調べる
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeX1():"),EEPROM::zProbeX1());
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeY1():"),EEPROM::zProbeY1());
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeX2():"),EEPROM::zProbeX2());
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeY2():"),EEPROM::zProbeY2());
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeX3():"),EEPROM::zProbeX3());
+	Com::printFLN(PSTR("measureAutolevelPlane(): zProbeY3():"),EEPROM::zProbeY3());
+
+	Com::printFLN(PSTR("measureAutolevelPlane(): ox:"),ox);
+	Com::printFLN(PSTR("measureAutolevelPlane(): oy:"),oy);
+	Com::printFLN(PSTR("measureAutolevelPlane(): ax:"),ax);
+	Com::printFLN(PSTR("measureAutolevelPlane(): ay:"),ay);
+	Com::printFLN(PSTR("measureAutolevelPlane(): bx:"),bx);
+	Com::printFLN(PSTR("measureAutolevelPlane(): by:"),by);
+
     for(int ix = 0; ix < BED_LEVELING_GRID_SIZE; ix++) {
         for(int iy = 0; iy < BED_LEVELING_GRID_SIZE; iy++) {
             float px = ox + static_cast<float>(ix) * ax + static_cast<float>(iy) * bx;
             float py = oy + static_cast<float>(ix) * ay + static_cast<float>(iy) * by;
+            // px,pyを調べる
+        	Com::printFLN(PSTR("measureAutolevelPlane(): px:"),px);
+        	Com::printFLN(PSTR("measureAutolevelPlane(): py:"),py);
+
             Printer::moveTo(px,py,IGNORE_COORDINATE,IGNORE_COORDINATE,EEPROM::zProbeXYSpeed());
             float h = Printer::runZProbe(false,false);
             if(h == ILLEGAL_Z_PROBE)
@@ -280,6 +307,8 @@ G32 S<0..2> - Autolevel print bed. S = 1 measure zLength, S = 2 Measure and stor
 S = 0 : Do not update length - use this if you have not homed before or you mess up zlength!
 S = 1 : Measure zLength so homing works
 S = 2 : Like s = 1 plus store results in EEPROM for next connection.
+内部でmeasureAutolevelPlane()とcorrectAutolevel()を呼んでる
+Commands::processGCode()によりGCodeのG32コマンドからAuto leveling(事前測定)が起動される
 */
 bool runBedLeveling(GCode *com) {
     float h1,h2,h3,hc,oldFeedrate = Printer::feedrate;
@@ -364,6 +393,9 @@ bool runBedLeveling(GCode *com) {
 
 #endif
 
+/**
+ * 有効無効切り替え
+ */
 void Printer::setAutolevelActive(bool on) {
 #if FEATURE_AUTOLEVEL
     if(on == isAutolevelActive()) return;
@@ -375,6 +407,9 @@ void Printer::setAutolevelActive(bool on) {
     updateCurrentPosition(false);
 #endif // FEATURE_AUTOLEVEL
 }
+/**
+ * runZMaxProbe()は無効化されている(MAX_HARDWARE_ENDSTOP_Z=false)
+ */
 #if MAX_HARDWARE_ENDSTOP_Z
 float Printer::runZMaxProbe() {
 #if NONLINEAR_SYSTEM
@@ -406,6 +441,9 @@ float Printer::runZMaxProbe() {
 #endif
 
 #if FEATURE_Z_PROBE
+/**
+ * 前処理。原点に移動
+ */
 void Printer::startProbing(bool runScript) {
     float oldOffX = Printer::offsetX;
     float oldOffY = Printer::offsetY;
@@ -424,6 +462,9 @@ void Printer::startProbing(bool runScript) {
                                            0, 0, EEPROM::zProbeXYSpeed(), true, ALWAYS_CHECK_ENDSTOPS);
 }
 
+/**
+ * 後処理。新しい原点に移動
+ */
 void Printer::finishProbing() {
     float oldOffX = Printer::offsetX;
     float oldOffY = Printer::offsetY;
@@ -454,6 +495,7 @@ d) Add distortion correction.
 e) Add bending correction
 
 Then we return the measured and corrected z distance.
+高さを測って返す
 */
 float Printer::runZProbe(bool first,bool last,uint8_t repeat,bool runStartScript) {
     float oldOffX = Printer::offsetX;
@@ -555,6 +597,9 @@ float Printer::bendingCorrectionAt(float x, float y) {
 	return plane.z(x,y);
 }
 
+/**
+ * 計測前の原点位置合わせ?
+ */
 void Printer::waitForZProbeStart() {
 #if Z_PROBE_WAIT_BEFORE_TEST
     Endstops::update();
@@ -587,6 +632,9 @@ void Printer::waitForZProbeStart() {
 }
 #endif
 
+/**
+ * 位置補正
+ */
 void Printer::transformToPrinter(float x,float y,float z,float &transX,float &transY,float &transZ) {
 #if FEATURE_AXISCOMP
     // Axis compensation:
@@ -610,6 +658,9 @@ void Printer::transformToPrinter(float x,float y,float z,float &transX,float &tr
 #endif	
 }
 
+/**
+ * 位置補正
+ */
 void Printer::transformFromPrinter(float x,float y,float z,float &transX,float &transY,float &transZ) {
 #if BED_CORRECTION_METHOD != 1 && FEATURE_AUTOLEVEL
 	if(isAutolevelActive()) {
