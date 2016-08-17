@@ -208,17 +208,19 @@ bool measureAutolevelPlane(Plane &plane) {
 	Com::printFLN(PSTR("measureAutolevelPlane(): ay:"),ay);
 	Com::printFLN(PSTR("measureAutolevelPlane(): bx:"),bx);
 	Com::printFLN(PSTR("measureAutolevelPlane(): by:"),by);
+	Com::printFLN(PSTR("-----------------------------"));
 
     for(int ix = 0; ix < BED_LEVELING_GRID_SIZE; ix++) {
         for(int iy = 0; iy < BED_LEVELING_GRID_SIZE; iy++) {
             float px = ox + static_cast<float>(ix) * ax + static_cast<float>(iy) * bx;
-            float py = oy + static_cast<float>(ix) * ay + static_cast<float>(iy) * by;
+            float py = oy + static_cast<float>(ix) * ay + static_cast<float>(iy) * by - 10;
             // px,pyを調べる
         	Com::printFLN(PSTR("measureAutolevelPlane(): px:"),px);
         	Com::printFLN(PSTR("measureAutolevelPlane(): py:"),py);
 
             Printer::moveTo(px,py,IGNORE_COORDINATE,IGNORE_COORDINATE,EEPROM::zProbeXYSpeed());
             float h = Printer::runZProbe(false,false);
+        	Com::printFLN(PSTR("measureAutolevelPlane(): h:"),h);
             if(h == ILLEGAL_Z_PROBE)
                 return false;
             builder.addPoint(px,py,h);
@@ -267,6 +269,10 @@ bool measureAutolevelPlane(Plane &plane) {
 }
 
 void correctAutolevel(GCode *code,Plane &plane) {
+	Com::printFLN(PSTR("correctAutolevel(): BED_CORRECTION_METHOD:"),BED_CORRECTION_METHOD);
+	Com::printFLN(PSTR("correctAutolevel(): NUM_MOTOR_DRIVERS:"),NUM_MOTOR_DRIVERS);
+//	Com::printFLN(PSTR("correctAutolevel(): LIMIT_MOTORIZED_CORRECTION:"),LIMIT_MOTORIZED_CORRECTION);
+
 #if BED_CORRECTION_METHOD == 0 // rotation matrix
     //Printer::buildTransformationMatrix(plane.z(EEPROM::zProbeX1(),EEPROM::zProbeY1()),plane.z(EEPROM::zProbeX2(),EEPROM::zProbeY2()),plane.z(EEPROM::zProbeX3(),EEPROM::zProbeY3()));
 	Printer::buildTransformationMatrix(plane);
@@ -279,8 +285,14 @@ void correctAutolevel(GCode *code,Plane &plane) {
     float h2 = plane.z(BED_MOTOR_2_X,BED_MOTOR_2_Y);
     float h3 = plane.z(BED_MOTOR_3_X,BED_MOTOR_3_Y);
     // h1 is reference heights, h2 => motor 0, h3 => motor 1
+	Com::printFLN(PSTR("correctAutolevel(): h1:"),h1);
+	Com::printFLN(PSTR("correctAutolevel(): h2:"),h2);
+	Com::printFLN(PSTR("correctAutolevel(): h3:"),h3);
     h2 -= h1;
     h3 -= h1;
+	Com::printFLN(PSTR("correctAutolevel(): modified h2:"),h2);
+	Com::printFLN(PSTR("correctAutolevel(): modified h3:"),h3);
+
 #if defined(LIMIT_MOTORIZED_CORRECTION)
 	if(h2 < -LIMIT_MOTORIZED_CORRECTION) h2 = -LIMIT_MOTORIZED_CORRECTION;
 	if(h2 > LIMIT_MOTORIZED_CORRECTION) h2 = LIMIT_MOTORIZED_CORRECTION;
@@ -311,6 +323,12 @@ S = 2 : Like s = 1 plus store results in EEPROM for next connection.
 Commands::processGCode()によりGCodeのG32コマンドからAuto leveling(事前測定)が起動される
 */
 bool runBedLeveling(GCode *com) {
+    Com::printFLN(PSTR("runBedLeveling(): DRIVE_SYSTEM:"), DRIVE_SYSTEM);
+    Com::printFLN(PSTR("runBedLeveling(): DELTA:"), DELTA);
+    Com::printFLN(PSTR("runBedLeveling(): MAX_HARDWARE_ENDSTOP_Z:"), MAX_HARDWARE_ENDSTOP_Z);
+    Com::printFLN(PSTR("runBedLeveling(): DISTORTION_CORRECTION:"), DISTORTION_CORRECTION);
+
+
     float h1,h2,h3,hc,oldFeedrate = Printer::feedrate;
     int s = com->hasS() ? com->S : -1;
 #if DISTORTION_CORRECTION
@@ -345,7 +363,9 @@ bool runBedLeveling(GCode *com) {
             Com::printErrorFLN(PSTR("Probing had returned errors - autoleveling canceled."));
             return false;
         }
+        Com::printFLN(PSTR("runBedLeveling(): measureAutolevelPlane() finished"));
         correctAutolevel(com,plane);
+        Com::printFLN(PSTR("runBedLeveling(): correctAutolevel() finished"));
 
         // Leveling is finished now update own positions and store leveling data if needed
         float currentZ = plane.z((float)Printer::currentPositionSteps[X_AXIS] * Printer::invAxisStepsPerMM[X_AXIS],(float)Printer::currentPositionSteps[Y_AXIS] * Printer::invAxisStepsPerMM[Y_AXIS]);
@@ -380,6 +400,7 @@ bool runBedLeveling(GCode *com) {
     }
     Printer::updateCurrentPosition(true);
     Commands::printCurrentPosition(PSTR("G32 "));
+    // ここまではログに出てる
 #if DISTORTION_CORRECTION
     if(distEnabled)
         Printer::distortion.enable(false); // if level has changed, distortion is also invalid
@@ -475,6 +496,17 @@ void Printer::finishProbing() {
         Printer::offsetY = -Extruder::current->yOffset * Printer::invAxisStepsPerMM[Y_AXIS];
         Printer::offsetZ = -Extruder::current->zOffset * Printer::invAxisStepsPerMM[Z_AXIS];
     }
+
+    Com::printFLN(PSTR("finishProbing(): oldOffX:"),oldOffX);
+    Com::printFLN(PSTR("finishProbing(): oldOffY:"),oldOffY);
+    Com::printFLN(PSTR("finishProbing(): oldOffZ:"),oldOffZ);
+    Com::printFLN(PSTR("finishProbing(): Printer::offsetX:"),Printer::offsetX);
+    Com::printFLN(PSTR("finishProbing(): Printer::offsetY:"),Printer::offsetY);
+    Com::printFLN(PSTR("finishProbing(): Printer::offsetZ:"),Printer::offsetZ);
+    Com::printFLN(PSTR("finishProbing(): toX:"),(Printer::offsetX - oldOffX) * Printer::axisStepsPerMM[X_AXIS]);
+    Com::printFLN(PSTR("finishProbing(): toY:"),(Printer::offsetY - oldOffY) * Printer::axisStepsPerMM[Y_AXIS]);
+    Com::printFLN(PSTR("finishProbing(): toZ:"),(Printer::offsetZ - oldOffZ) * Printer::axisStepsPerMM[Z_AXIS]);
+
     PrintLine::moveRelativeDistanceInSteps((Printer::offsetX - oldOffX) * Printer::axisStepsPerMM[X_AXIS],
                                            (Printer::offsetY - oldOffY) * Printer::axisStepsPerMM[Y_AXIS],
                                            (Printer::offsetZ - oldOffZ) * Printer::axisStepsPerMM[Z_AXIS], 0, EEPROM::zProbeXYSpeed(), true, ALWAYS_CHECK_ENDSTOPS);
