@@ -213,7 +213,7 @@ bool measureAutolevelPlane(Plane &plane) {
     for(int ix = 0; ix < BED_LEVELING_GRID_SIZE; ix++) {
         for(int iy = 0; iy < BED_LEVELING_GRID_SIZE; iy++) {
             float px = ox + static_cast<float>(ix) * ax + static_cast<float>(iy) * bx;
-            float py = oy + static_cast<float>(ix) * ay + static_cast<float>(iy) * by - 10;
+            float py = oy + static_cast<float>(ix) * ay + static_cast<float>(iy) * by + 10;
             // px,pyを調べる
         	Com::printFLN(PSTR("measureAutolevelPlane(): px:"),px);
         	Com::printFLN(PSTR("measureAutolevelPlane(): py:"),py);
@@ -331,6 +331,7 @@ bool runBedLeveling(GCode *com) {
 
     float h1,h2,h3,hc,oldFeedrate = Printer::feedrate;
     int s = com->hasS() ? com->S : -1;
+    Com::printFLN(PSTR("runBedLeveling(): com->hasS():"), s);
 #if DISTORTION_CORRECTION
     bool distEnabled = Printer::distortion.isEnabled();
     Printer::distortion.disable(false); // if level has changed, distortion is also invalid
@@ -390,8 +391,12 @@ bool runBedLeveling(GCode *com) {
             break;  // we reached achievable precision so we can stop
     }
 #endif
+    Com::printFLN(PSTR("finishProbing(): Printer::offsetX-1:"),Printer::offsetX);
     Printer::updateDerivedParameter();
-    Printer::finishProbing();
+    Com::printFLN(PSTR("finishProbing(): Printer::offsetX-2:"),Printer::offsetX);
+    // ここで右端にぶつかる
+    // なかったらどうなる?
+//    Printer::finishProbing();
 #if BED_CORRECTION_METHOD != 1
     Printer::setAutolevelActive(true); // only for software correction or we can spare the comp. time
 #endif
@@ -503,6 +508,9 @@ void Printer::finishProbing() {
     Com::printFLN(PSTR("finishProbing(): Printer::offsetX:"),Printer::offsetX);
     Com::printFLN(PSTR("finishProbing(): Printer::offsetY:"),Printer::offsetY);
     Com::printFLN(PSTR("finishProbing(): Printer::offsetZ:"),Printer::offsetZ);
+    Com::printFLN(PSTR("finishProbing(): Printer::axisStepsPerMM[X_AXIS]:"),Printer::axisStepsPerMM[X_AXIS]);
+    Com::printFLN(PSTR("finishProbing(): Printer::axisStepsPerMM[Y_AXIS]:"),Printer::axisStepsPerMM[Y_AXIS]);
+    Com::printFLN(PSTR("finishProbing(): Printer::axisStepsPerMM[Z_AXIS]:"),Printer::axisStepsPerMM[Z_AXIS]);
     Com::printFLN(PSTR("finishProbing(): toX:"),(Printer::offsetX - oldOffX) * Printer::axisStepsPerMM[X_AXIS]);
     Com::printFLN(PSTR("finishProbing(): toY:"),(Printer::offsetY - oldOffY) * Printer::axisStepsPerMM[Y_AXIS]);
     Com::printFLN(PSTR("finishProbing(): toZ:"),(Printer::offsetZ - oldOffZ) * Printer::axisStepsPerMM[Z_AXIS]);
